@@ -4,7 +4,11 @@
 Single Go package at the repo root (`package main`):
 - `matrix.go` — the 3x3 matrix engine: `Layers`×`Nodes` channel mesh with a worker pool per node (layer 0 ingestion, layer 1 execution, layer 2 state routing) and a lock-free `processed` counter.
 - `main.go` — HTTP front door (`:8080`): `GET /healthz`, `POST /v1/matrix/ingest` (routes one transaction into layer 0), `GET /v1/matrix/telemetry` (live processed count), plus graceful shutdown that stops the server before `MatrixRouter.Stop()`.
-- `ui.go` — minimal read-only landing page at `/` with a button that POSTs a test transaction and prints the JSON response.
+- `ui.go` + `web/dashboard.html` — real-time dashboard at `/`: polls `GET /v1/matrix/telemetry` once a second to show the processed count, current tx/s, peak and a 60-sample throughput chart, plus buttons that POST to the ingest endpoint. The HTML is embedded with `go:embed`, so editing it triggers an air rebuild (air's default `include_ext` covers `html`).
+
+## Findings worth knowing (continued)
+- The dashboard samples telemetry over `fetch` polling — there is no websocket/SSE, and the server keeps no history; rates are derived client-side from consecutive counts. `/` is served with `Cache-Control: no-store` so the preview never renders a stale page after a rebuild.
+
 
 ## Running it here
 ```
