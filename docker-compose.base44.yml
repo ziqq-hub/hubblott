@@ -1,0 +1,35 @@
+services:
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.base44
+    working_dir: /app
+    # Runs straight from the bind-mounted source with live reload.
+    # NOTE: air 1.61.4 ignores its config file here, so the build/run settings
+    # are passed as CLI flags instead of an .air.toml.
+    command:
+      - sh
+      - -ec
+      - >-
+        exec air
+        -build.cmd "mkdir -p /tmp/hubblott-air && go build -o /tmp/hubblott-air/hubblott ."
+        -build.bin /tmp/hubblott-air/hubblott
+        -tmp_dir /tmp/hubblott-air
+        -build.exclude_dir .git
+    volumes:
+      - ./:/app
+      - go-build-cache:/root/.cache/go-build
+    ports:
+      - "3000:8080"
+    environment:
+      - BASE44_PREVIEW_MODE
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 25s
+
+volumes:
+  go-build-cache:

@@ -244,7 +244,7 @@ func (e *Engine) recycleTx(tx *Transaction) {
 }
 
 func main() {
-    _, pub, _ := ed25519.GenerateKey(nil)
+    pub, _, _ := ed25519.GenerateKey(nil)
     e := NewEngine(50000, pub)
 
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -261,6 +261,7 @@ func main() {
         _, _ = w.Write([]byte("ok\n"))
     })
     mux.HandleFunc("/v1/matrix/ingest", e.HandleIngest)
+    registerUI(mux)
 
     server := &http.Server{Addr: ":8080", Handler: mux, ReadHeaderTimeout: 5 * time.Second}
     go func() {

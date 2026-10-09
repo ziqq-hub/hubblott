@@ -1,0 +1,6 @@
+FROM golang:1.23-bookworm
+
+# Live-reload runner used by docker-compose.base44.yml (development only).
+RUN go install github.com/air-verse/air@v1.61.4
+
+WORKDIR /app
