@@ -32,9 +32,10 @@ const statusPage = `<!doctype html>
 <body>
 <main>
   <h1>Hubblott 3x3 Matrix Execution Engine</h1>
-  <p class="sub">Tier&nbsp;1 routing &rarr; Tier&nbsp;2 optimisation &rarr; Tier&nbsp;3 vault settlement</p>
+  <p class="sub">Layer&nbsp;0 ingestion &rarr; Layer&nbsp;1 execution &rarr; Layer&nbsp;2 state routing</p>
   <p>Health <code>GET /healthz</code></p>
   <p>Ingest <code>POST /v1/matrix/ingest</code></p>
+  <p>Telemetry <code>GET /v1/matrix/telemetry</code></p>
   <button id="submit">Submit test transaction</button>
   <pre id="out">idle</pre>
 </main>

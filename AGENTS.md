@@ -2,8 +2,9 @@
 
 ## What this is
 Single Go package at the repo root (`package main`):
-- `main.go` — 3x3 matrix execution engine + HTTP server on `:8080` (workers for tier 1 routing, tier 2 optimisation, tier 3 vault settlement).
-- `ui.go` — minimal read-only landing page served at `/`, with a button that POSTs a test transaction to `/v1/matrix/ingest`.
+- `matrix.go` — the 3x3 matrix engine: `Layers`×`Nodes` channel mesh with a worker pool per node (layer 0 ingestion, layer 1 execution, layer 2 state routing) and a lock-free `processed` counter.
+- `main.go` — HTTP front door (`:8080`): `GET /healthz`, `POST /v1/matrix/ingest` (routes one transaction into layer 0), `GET /v1/matrix/telemetry` (live processed count), plus graceful shutdown that stops the server before `MatrixRouter.Stop()`.
+- `ui.go` — minimal read-only landing page at `/` with a button that POSTs a test transaction and prints the JSON response.
 
 ## Running it here
 ```
@@ -12,8 +13,7 @@ docker compose -f docker-compose.base44.yml up -d --build
 Host port **3000** is mapped to the container's `8080` (the preview entry point).
 
 ## Findings worth knowing
-- **No external services, no credentials, no database.** Everything is in-process: the ed25519 keypair is generated at startup and the vault is an in-memory sharded map. The README's "KMS-encrypted vault isolation" is not backed by any KMS client in the code, so no secret values are required.
-- **The committed `main.go` did not compile.** `_, pub, _ := ed25519.GenerateKey(nil)` bound the *private* key and passed it to `NewEngine(..., ed25519.PublicKey)`. Fixed to `pub, _, _`.
+- **No external services, no credentials, no database.** The mesh and its counters are in-process; the ledger commit step is a counter increment. Nothing needs a secret value.
 - **`go.mod` was added** (`module hubblott`). Without it `go build .` / `go run .` fail outside GOPATH, which also breaks the live-reload command.
 - **Live reload uses `air`** (installed in `Dockerfile.base44`). Two quirks, both verified in this image:
   - air 1.61.4 ignores `-c <config>` / `.air.toml` here, so the build settings are passed as CLI flags in `docker-compose.base44.yml`.
@@ -21,10 +21,13 @@ Host port **3000** is mapped to the container's `8080` (the preview entry point)
   - Build artifacts go to `/tmp/hubblott-air`, so nothing is written into the repo working tree.
 - No host/origin allowlisting is needed: `net/http.ServeMux` does not check `Host`/`Origin`, and there is no CORS, cookie or session auth. `BASE44_PREVIEW_MODE` is passed through but nothing gates on it.
 - The Compose healthcheck probes `GET /healthz` with the image's own `curl`.
+- `MatrixRouter.Stop()` closes the mesh channels after `wg.Wait()`, so it must not overlap in-flight `RouteIngestion` calls — hence `srv.Shutdown` runs first in `main`.
+- Routing is `tx.ID % Nodes`, so every transaction must carry a non-zero `ID`; the HTTP handler assigns one from an atomic counter.
 
 ## Verifying it works
 ```
-curl -i http://localhost:3000/healthz              # 200 ok
-curl -i -X POST http://localhost:3000/v1/matrix/ingest   # 202 {"tx_id":"TX-...","matrix":"11"}
+curl -i http://localhost:3000/healthz                       # 200 ok
+curl -i -X POST http://localhost:3000/v1/matrix/ingest      # 202 {"tx_id":N,"matrix":"3x3","total_processed":...}
+curl -i http://localhost:3000/v1/matrix/telemetry           # {"matrix":"3x3","processed":N}
 ```
-The POST also produces engine logs: `T2 settled tx=... spread=0.045` (tier 2 path) and `[VAULT] settled tx=... audit_hash=...` (tier 3 path). There is no test suite in the repo.
+`processed` in the ingest response can lag by one request because routing is asynchronous — the telemetry endpoint is the accurate read. There is no test suite in the repo.
