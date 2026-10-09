@@ -21,6 +21,10 @@ services:
       - go-build-cache:/root/.cache/go-build
     ports:
       - "3000:8080"
+    # Platform-managed secrets (Google Sheets). Listed last so its values win;
+    # absent secrets simply leave burst history disabled.
+    env_file:
+      - /run/base44/app.env
     environment:
       - BASE44_PREVIEW_MODE
     restart: on-failure

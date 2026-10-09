@@ -71,7 +71,7 @@
 
   <section class="controls">
     <button id="send">Send 1 transaction</button>
-    <button id="burst" class="secondary">Send 100</button>
+    <button id="burst" class="secondary">Run burst (1,000)</button>
   </section>
 
   <p id="log" class="log">polling /v1/matrix/telemetry every 1 s</p>
@@ -131,19 +131,31 @@
     }
   }
 
-  async function send(count) {
+  async function ingestOne() {
     el('send').disabled = true;
-    el('burst').disabled = true;
     try {
-      for (let sent = 0; sent < count; sent += 20) {
-        const batch = Math.min(20, count - sent);
-        const responses = await Promise.all(Array.from({ length: batch },
-          () => fetch('/v1/matrix/ingest', { method: 'POST' })));
-        el('log').textContent = 'sent ' + (sent + batch) + '/' + count +
-          ' · last HTTP ' + responses[responses.length - 1].status;
-      }
+      const res = await fetch('/v1/matrix/ingest', { method: 'POST' });
+      el('log').textContent = 'sent 1 transaction · HTTP ' + res.status;
     } catch (err) {
       el('log').textContent = 'ingest failed: ' + err.message;
+    } finally {
+      el('send').disabled = false;
+      poll();
+    }
+  }
+
+  async function runBurst() {
+    el('send').disabled = true;
+    el('burst').disabled = true;
+    el('log').textContent = 'running burst…';
+    try {
+      const res = await fetch('/v1/matrix/burst', { method: 'POST' });
+      const data = await res.json();
+      el('log').textContent = 'burst ' + data.count + ' · ' + data.duration_ms + ' ms · ' +
+        data.throughput_tx_s.toFixed(1) + ' tx/s · sheet: ' +
+        (data.recorded ? 'recorded' : 'not recorded — ' + (data.reason || 'unconfigured'));
+    } catch (err) {
+      el('log').textContent = 'burst failed: ' + err.message;
     } finally {
       el('send').disabled = false;
       el('burst').disabled = false;
@@ -151,8 +163,8 @@
     }
   }
 
-  el('send').addEventListener('click', () => send(1));
-  el('burst').addEventListener('click', () => send(100));
+  el('send').addEventListener('click', ingestOne);
+  el('burst').addEventListener('click', runBurst);
   poll();
   setInterval(poll, 1000);
 })();

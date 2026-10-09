@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -15,6 +14,7 @@ import (
 // server exposes the matrix mesh over HTTP; it owns no engine state of its own.
 type server struct {
 	router *MatrixRouter
+	sheets *sheetRecorder
 	nextID uint64
 }
 
@@ -25,13 +25,7 @@ func (s *server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := atomic.AddUint64(&s.nextID, 1)
-	tx := &Transaction{
-		ID:        id,
-		Amount:    15000.75 * float64(id),
-		Payload:   "B2B_INFRA_ROUTING_DATA_STREAM",
-		Timestamp: time.Now(),
-	}
+	tx := s.newTransaction()
 	s.router.RouteIngestion(tx)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -48,7 +42,7 @@ func main() {
 	router.Start()
 	defer router.Stop()
 
-	s := &server{router: router}
+	s := &server{router: router, sheets: newSheetRecorder()}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -59,6 +53,7 @@ func main() {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 	mux.HandleFunc("/v1/matrix/ingest", s.handleIngest)
+	mux.HandleFunc("/v1/matrix/burst", s.handleBurst)
 	mux.HandleFunc("/v1/matrix/telemetry", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
